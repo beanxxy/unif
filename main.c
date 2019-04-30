@@ -18,8 +18,37 @@
 MYSQL conn;
 MYSQL_RES *res;
 MYSQL_ROW row;
+void *(*fn[10])(char *path,char *type,char *buf);
+int fsize=0;
 void printfdb(char *p){
     printf("%s",p);
+}
+void admin(char *path,char *type,char *buf){
+    int j=0;
+    j=sprintf(buf, "HTTP/1.0 200 OK\r\n");
+    j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
+    j+=sprintf(buf+j, "\r\n");
+    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=sprintf(buf+j, "主界面\r\n");
+}
+void login(char *path,char *type,char *buf){
+    int j=0;
+    j=sprintf(buf, "HTTP/1.0 200 OK\r\n");
+    j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
+    j+=sprintf(buf+j, "\r\n");
+    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=sprintf(buf+j, "登陆界面\r\n");
+}
+int control(char *path,char *type,char *buf){
+    int fi;
+    if(path[1]>0)fi=path[1]-47;else fi=path[1];
+    if(fi>=0&&fi<fsize){
+        fn[fi](path,type,buf);
+        return 0;
+    }else{
+        return 1;
+    }
+
 }
 int key=0;
 void testdb(){
@@ -40,6 +69,25 @@ void testdb(){
     }else{
         printf("error:%s",mysql_error(&conn));
     }
+}
+void nofind(char *buf){
+    sprintf(buf, "HTTP/1.0 400 OK\r\n");
+}
+void out404(char *buf){
+    int j=0;
+    j=sprintf(buf, "HTTP/1.0 404 OK\r\n");
+    j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
+    j+=sprintf(buf+j, "\r\n");
+    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=sprintf(buf+j, "404：找不到页面!\r\n");
+}
+void testout(char *buf){
+    int j=0;
+    j=sprintf(buf, "HTTP/1.0 200 OK\r\n");
+    j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
+    j+=sprintf(buf+j, "\r\n");
+    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=sprintf(buf+j, "你好!\r\n");
 }
 void testServer(){
 /* 定义server和client的文件描述符 */
@@ -156,15 +204,31 @@ void startServer(){
         exit(-1);
     }
     printf("http server running on port %d\n", port);
+    char type[100];
+    char path[1024];
+    char cookie[100];
     while(1){
         client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
         /* 调用recv函数接收客户端发来的请求信息 */
-        send(client_fd, buf, strlen(buf), 0);
         recv_len = recv(client_fd, recv_buf, BUFF_SIZE, 0);
+    //    nofind(buf);
+    //    testout(buf);
+        //printf("%s\n",recv_buf);
+        sscanf(recv_buf,"%s%s",type,path);
+        //sscanf(recv_buf,"%*[^Cookie:]*%[^=]",cookie);
+        printf("%s",cookie);
+        printf("%s%d\n",type,path[1]);
+        if(control(path,type,buf))
+            out404(buf);
+        send(client_fd, buf, strlen(buf), 0);
         close(client_fd);
     }
 }
 int main()
 {
+ //    testServer();
+    fn[fsize++]=&admin;
+    fn[fsize++]=&login;
+    startServer();
     return 0;
 }
