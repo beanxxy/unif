@@ -9,47 +9,57 @@
 #include <sys/stat.h>
 #include <mysql/mysql.h>
 
-#define PORT 9001
 #define QUEUE_MAX_COUNT 5
 #define BUFF_SIZE 1024
 #define SERVER_STRING "Server: hoohackhttpd/0.1.0\r\n"
 
+int PORT = 9001;
 
 MYSQL conn;
 MYSQL_RES *res;
 MYSQL_ROW row;
-void *(*fn[10])(char *path,char *type,char *buf);
-int fsize=0;
+void *(*fn[1000])(char *path,char *type,char *buf);
+int fsize=1;
 void printfdb(char *p){
     printf("%s",p);
 }
+int addcss(char *buf){
+    return sprintf(buf, "<link rel='icon' href='https://unpkg.com/spectre.css/dist/spectre.min.css'>\r\n");
+}
+
+int add200(char *buf){
+    return sprintf(buf, "HTTP/1.0 200 OK\r\nContent-Type: text/html;charset=utf-8\r\n\r\n<link rel='icon' href='data:image/icon;base64'>\r\n");
+}
+void url(char *path,char *type,char *buf,char *val){
+    int j=0;
+    j=sprintf(buf, "HTTP/1.0 301 Moved Permanently\r\n");
+    j+=sprintf(buf+j, "Location:");
+    j+=sprintf(buf+j, val);
+    j+=sprintf(buf+j, "\r\n");
+}
 void admin(char *path,char *type,char *buf){
     int j=0;
-    j=sprintf(buf, "HTTP/1.0 200 OK\r\n");
-    j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
-    j+=sprintf(buf+j, "\r\n");
-    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=add200(buf+j);
     j+=sprintf(buf+j, "主界面\r\n");
 }
 void login(char *path,char *type,char *buf){
     int j=0;
-    j=sprintf(buf, "HTTP/1.0 200 OK\r\n");
-    j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
-    j+=sprintf(buf+j, "\r\n");
-    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
-    j+=sprintf(buf+j, "登陆界面\r\n");
+    //j+=sprintf(buf+j,"Set-Cookie:xxx=1234;\r\n");
+    j+=add200(buf+j);
+    j+=addcss(buf+j);
+    j+=sprintf(buf+j, "<div class='columns'>\r\n");
+        j+=sprintf(buf+j, "<div class='form-group'>\r\n");
+        j+=sprintf(buf+j, "</div>\r\n");
+    j+=sprintf(buf+j, "</div>\r\n");
 }
 int control(char *path,char *type,char *buf){
     int fi;
-    if(path[1]>0)fi=path[1]-47;else fi=path[1];
-    if(fi>=0&&fi<fsize){
-        fn[fi](path,type,buf);
-        return 0;
-    }else{
-        return 1;
-    }
-
+    fi=path[1];
+    if(fn[fi]==NULL)return 1;
+    fn[fi](path,type,buf);
+    return 0; 
 }
+
 int key=0;
 void testdb(){
 	key=1;
@@ -75,10 +85,10 @@ void nofind(char *buf){
 }
 void out404(char *buf){
     int j=0;
-    j=sprintf(buf, "HTTP/1.0 404 OK\r\n");
+    j=sprintf(buf, "HTTP/1.0 404 Not Found\r\n");
     j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
     j+=sprintf(buf+j, "\r\n");
-    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64'>\r\n");
     j+=sprintf(buf+j, "404：找不到页面!\r\n");
 }
 void testout(char *buf){
@@ -86,7 +96,7 @@ void testout(char *buf){
     j=sprintf(buf, "HTTP/1.0 200 OK\r\n");
     j+=sprintf(buf+j, "Content-Type: text/html;charset=utf-8\r\n");
     j+=sprintf(buf+j, "\r\n");
-    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64,aWNvv'>\r\n");
+    j+=sprintf(buf+j, "<link rel='icon' href='data:image/icon;base64'>\r\n");
     j+=sprintf(buf+j, "你好!\r\n");
 }
 void testServer(){
@@ -207,6 +217,7 @@ void startServer(){
     char type[100];
     char path[1024];
     char cookie[100];
+    int ikie;
     while(1){
         client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len);
         /* 调用recv函数接收客户端发来的请求信息 */
@@ -215,20 +226,34 @@ void startServer(){
     //    testout(buf);
         //printf("%s\n",recv_buf);
         sscanf(recv_buf,"%s%s",type,path);
-        //sscanf(recv_buf,"%*[^Cookie:]*%[^=]",cookie);
-        printf("%s",cookie);
-        printf("%s%d\n",type,path[1]);
-        if(control(path,type,buf))
-            out404(buf);
+        printf("path=%d\n",path[1]);
+        ikie=strstr(recv_buf,"Cookie");
+        if(path[1]==48){
+            control(path,type,buf);
+        }else{
+            if(ikie==0){
+                url(path,type,buf,"/0");
+            }else{
+                if(control(path,type,buf)){
+                    out404(buf);
+                }
+            }
+        }
+        //sscanf(strstr(recv_buf,"Cookie"),"%[^;]",cookie);
         send(client_fd, buf, strlen(buf), 0);
         close(client_fd);
     }
 }
-int main()
+int main(int argc,char *arg[])
 {
  //    testServer();
-    fn[fsize++]=&admin;
-    fn[fsize++]=&login;
+    int po;
+    if(arg[1]!=NULL){
+         sscanf(arg[1],"%d",&po);  
+         PORT=po;
+    }
+    fn[0]=&admin;
+    fn[48]=&login;
     startServer();
     return 0;
 }
